@@ -1139,6 +1139,12 @@ where
         }
     }
 
+    // TODO: docs like on_downloaded_block
+    // should this even exist?
+    fn on_downloaded_block_range(&mut self, blocks: Vec<SealedBlock>) {
+        todo!()
+    }
+
     /// Attempt to form a new canonical chain based on the current sync target.
     ///
     /// This is invoked when we successfully downloaded a new block from the network which resulted
@@ -1199,6 +1205,11 @@ where
         ev: EngineSyncEvent,
     ) -> Option<Result<(), BeaconConsensusEngineError>> {
         match ev {
+            EngineSyncEvent::FetchedBlocks(blocks) => {
+                // TODO: this method is just todo! for now, so it will panic if we send any block
+                // range requests
+                self.on_downloaded_block_range(blocks);
+            }
             EngineSyncEvent::FetchedFullBlock(block) => {
                 self.on_downloaded_block(block);
             }
