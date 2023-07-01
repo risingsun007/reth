@@ -403,6 +403,16 @@ where
         block > local_tip && block - local_tip > self.pipeline_run_threshold
     }
 
+    /// Returns how far the local tip is from the given block. If the local tip is at the same
+    /// height or its block number is greater than the given block, this returns None.
+    fn distance_from_local_tip(&self, local_tip: u64, block: u64) -> Option<u64> {
+        if block > local_tip {
+            Some(block - local_tip)
+        } else {
+            None
+        }
+    }
+
     /// If validation fails, the response MUST contain the latest valid hash:
     ///
     ///   - The block hash of the ancestor of the invalid payload satisfying the following two
@@ -1121,10 +1131,20 @@ where
                             //    * this case represents a potentially long range of blocks to
                             //      download and execute
 
-                            // TODO: use a range request
-                            // TODO: add method for the range count, and integrate that into the
-                            // upcoming `exceeds_pipeline_run_threshold` method
-                            self.sync.download_full_block(missing_parent.hash);
+                            if let Some(distance) = self
+                                .distance_from_local_tip(canonical_tip_num, missing_parent.number)
+                            {
+                                self.sync.download_block_range(missing_parent.hash, distance)
+                            } else {
+                                // This means the local tip is greater than the missing
+                                // parent?
+                                // TODO: when can this happen?
+                                //
+                                // is this distance_from_local_tip method just overengineering?
+                                //
+                                // can we convert this into a range download?
+                                self.sync.download_full_block(missing_parent.hash);
+                            }
                         }
                     }
                     _ => (),
@@ -1137,12 +1157,6 @@ where
                 }
             }
         }
-    }
-
-    // TODO: docs like on_downloaded_block
-    // should this even exist?
-    fn on_downloaded_block_range(&mut self, blocks: Vec<SealedBlock>) {
-        todo!()
     }
 
     /// Attempt to form a new canonical chain based on the current sync target.
@@ -1205,11 +1219,6 @@ where
         ev: EngineSyncEvent,
     ) -> Option<Result<(), BeaconConsensusEngineError>> {
         match ev {
-            EngineSyncEvent::FetchedBlocks(blocks) => {
-                // TODO: this method is just todo! for now, so it will panic if we send any block
-                // range requests
-                self.on_downloaded_block_range(blocks);
-            }
             EngineSyncEvent::FetchedFullBlock(block) => {
                 self.on_downloaded_block(block);
             }
