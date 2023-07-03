@@ -1129,10 +1129,12 @@ where
             if let Some(state) = sync_target_state {
                 // if we have already canonicalized the finalized block, we should
                 // skip the pipeline run
-                if Ok(None) ==
-                    self.blockchain.header_by_hash_or_number(state.finalized_block_hash.into())
-                {
-                    self.sync.set_pipeline_sync_target(state.finalized_block_hash)
+                match self.blockchain.header_by_hash_or_number(state.finalized_block_hash.into()) {
+                    Ok(None) => self.sync.set_pipeline_sync_target(state.finalized_block_hash),
+                    Err(err) => {
+                        warn!(target: "consensus::engine", ?err, "Failed to get finalized block header");
+                    }
+                    _ => (),
                 }
             }
         } else {
