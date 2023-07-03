@@ -1136,13 +1136,8 @@ where
                             {
                                 self.sync.download_block_range(missing_parent.hash, distance)
                             } else {
-                                // This means the local tip is greater than the missing
-                                // parent?
-                                // TODO: when can this happen?
-                                //
-                                // is this distance_from_local_tip method just overengineering?
-                                //
-                                // can we convert this into a range download?
+                                // This happens when the missing parent is on an outdated
+                                // sidechain
                                 self.sync.download_full_block(missing_parent.hash);
                             }
                         }
