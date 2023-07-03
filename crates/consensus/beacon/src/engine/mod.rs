@@ -1076,71 +1076,9 @@ where
                         self.try_make_sync_target_canonical(downloaded_num_hash);
                     }
                     InsertPayloadOk::Inserted(BlockStatus::Disconnected { missing_parent }) => {
-                        // compare the missing parent with the canonical tip
-                        let canonical_tip_num = self.blockchain.canonical_tip().number;
-                        let sync_target_state = self.forkchoice_state_tracker.sync_target_state();
-
-                        let mut requires_pipeline = self.exceeds_pipeline_run_threshold(
-                            canonical_tip_num,
-                            missing_parent.number,
-                        );
-
-                        // check if the downloaded block is the tracked finalized block
-                        if let Some(ref state) = sync_target_state {
-                            if downloaded_num_hash.hash == state.finalized_block_hash {
-                                // we downloaded the finalized block
-                                requires_pipeline = self.exceeds_pipeline_run_threshold(
-                                    canonical_tip_num,
-                                    downloaded_num_hash.number,
-                                );
-                            } else if let Some(buffered_finalized) =
-                                self.blockchain.buffered_header_by_hash(state.finalized_block_hash)
-                            {
-                                // if we have buffered the finalized block, we should check how far
-                                // we're off
-                                requires_pipeline = self.exceeds_pipeline_run_threshold(
-                                    canonical_tip_num,
-                                    buffered_finalized.number,
-                                );
-                            }
-                        }
-
-                        // if the number of missing blocks is greater than the max, run the
-                        // pipeline
-                        if requires_pipeline {
-                            if let Some(state) = sync_target_state {
-                                // if we have already canonicalized the finalized block, we should
-                                // skip the pipeline run
-                                if Ok(None) ==
-                                    self.blockchain.header_by_hash_or_number(
-                                        state.finalized_block_hash.into(),
-                                    )
-                                {
-                                    self.sync.set_pipeline_sync_target(state.finalized_block_hash)
-                                }
-                            }
-                        } else {
-                            // continue downloading the missing parent
-                            //
-                            // this happens if either:
-                            //  * the missing parent block num < canonical tip num
-                            //    * this case represents a missing block on a fork that is shorter
-                            //      than the canonical chain
-                            //  * the missing parent block num >= canonical tip num, but the number
-                            //    of missing blocks is less than the pipeline threshold
-                            //    * this case represents a potentially long range of blocks to
-                            //      download and execute
-
-                            if let Some(distance) = self
-                                .distance_from_local_tip(canonical_tip_num, missing_parent.number)
-                            {
-                                self.sync.download_block_range(missing_parent.hash, distance)
-                            } else {
-                                // This happens when the missing parent is on an outdated
-                                // sidechain
-                                self.sync.download_full_block(missing_parent.hash);
-                            }
-                        }
+                        // block is not connected to the canonical head, we need to download its
+                        // misisng branch first
+                        self.on_disconnected_block(downloaded_num_hash, missing_parent);
                     }
                     _ => (),
                 }
@@ -1150,6 +1088,70 @@ where
                 if err.kind().is_invalid_block() {
                     self.invalid_headers.insert(err.into_block().header);
                 }
+            }
+        }
+    }
+
+    /// TODO: docs
+    fn on_disconnected_block(
+        &mut self,
+        downloaded_block: BlockNumHash,
+        missing_parent: BlockNumHash,
+    ) {
+        // compare the missing parent with the canonical tip
+        let canonical_tip_num = self.blockchain.canonical_tip().number;
+        let sync_target_state = self.forkchoice_state_tracker.sync_target_state();
+
+        let mut requires_pipeline =
+            self.exceeds_pipeline_run_threshold(canonical_tip_num, missing_parent.number);
+
+        // check if the downloaded block is the tracked finalized block
+        if let Some(ref state) = sync_target_state {
+            if downloaded_block.hash == state.finalized_block_hash {
+                // we downloaded the finalized block
+                requires_pipeline =
+                    self.exceeds_pipeline_run_threshold(canonical_tip_num, downloaded_block.number);
+            } else if let Some(buffered_finalized) =
+                self.blockchain.buffered_header_by_hash(state.finalized_block_hash)
+            {
+                // if we have buffered the finalized block, we should check how far
+                // we're off
+                requires_pipeline = self
+                    .exceeds_pipeline_run_threshold(canonical_tip_num, buffered_finalized.number);
+            }
+        }
+
+        // if the number of missing blocks is greater than the max, run the
+        // pipeline
+        if requires_pipeline {
+            if let Some(state) = sync_target_state {
+                // if we have already canonicalized the finalized block, we should
+                // skip the pipeline run
+                if Ok(None) ==
+                    self.blockchain.header_by_hash_or_number(state.finalized_block_hash.into())
+                {
+                    self.sync.set_pipeline_sync_target(state.finalized_block_hash)
+                }
+            }
+        } else {
+            // continue downloading the missing parent
+            //
+            // this happens if either:
+            //  * the missing parent block num < canonical tip num
+            //    * this case represents a missing block on a fork that is shorter than the
+            //      canonical chain
+            //  * the missing parent block num >= canonical tip num, but the number of missing
+            //    blocks is less than the pipeline threshold
+            //    * this case represents a potentially long range of blocks to download and execute
+
+            if let Some(distance) =
+                self.distance_from_local_tip(canonical_tip_num, missing_parent.number)
+            {
+                self.sync.download_block_range(missing_parent.hash, distance)
+            } else {
+                // This happens when the missing parent is on an outdated
+                // sidechain
+                self.sync.download_full_block(missing_parent.hash);
             }
         }
     }
