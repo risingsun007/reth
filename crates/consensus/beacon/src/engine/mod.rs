@@ -1102,6 +1102,8 @@ where
         let canonical_tip_num = self.blockchain.canonical_tip().number;
         let sync_target_state = self.forkchoice_state_tracker.sync_target_state();
 
+        trace!(target: "consensus::engine", ?downloaded_block, ?missing_parent, tip=?canonical_tip_num, "Handling disconnected block");
+
         let mut requires_pipeline =
             self.exceeds_pipeline_run_threshold(canonical_tip_num, missing_parent.number);
 
