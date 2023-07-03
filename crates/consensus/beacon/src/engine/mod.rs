@@ -1092,7 +1092,19 @@ where
         }
     }
 
-    /// TODO: docs
+    /// This handles downloaded blocks that are shown to be disconnected from the canonical chain.
+    ///
+    /// This mainly compares the missing parent of the downloaded block with the current canonical
+    /// tip, and decides whether or not the pipeline should be run.
+    ///
+    /// The canonical tip is compared to the missing parent using `exceeds_pipeline_run_threshold`,
+    /// which returns true if the missing parent is sufficiently ahead of the canonical tip. If so,
+    /// the pipeline is run. Otherwise, we need to insert blocks using the blockchain tree, and
+    /// must download blocks outside of the pipeline. In this case, the distance is used to
+    /// determine how many blocks we should download at once.
+    ///
+    /// To download a range of blocks, a [FetchFullBlockRangeFuture] will be created and polled
+    /// until the branch is downloaded.
     fn on_disconnected_block(
         &mut self,
         downloaded_block: BlockNumHash,
