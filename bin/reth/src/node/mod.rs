@@ -2,8 +2,9 @@
 //!
 //! Starts the client
 use crate::{
-    args::{get_secret_key, DebugArgs, NetworkArgs, RpcServerArgs},
+    args::{get_secret_key, DebugArgs, NetworkArgs, RpcServerArgs, TxPoolArgs},
     dirs::DataDirPath,
+    init::init_genesis,
     prometheus_exporter,
     runner::CliContext,
     utils::get_single_header,
@@ -46,7 +47,6 @@ use reth_provider::{
 use reth_revm::Factory;
 use reth_revm_inspectors::stack::Hook;
 use reth_rpc_engine_api::EngineApi;
-use reth_staged_sync::utils::init::init_genesis;
 use reth_stages::{
     prelude::*,
     stages::{
@@ -131,6 +131,9 @@ pub struct Command {
 
     #[clap(flatten)]
     rpc: RpcServerArgs,
+
+    #[clap(flatten)]
+    txpool: TxPoolArgs,
 
     #[clap(flatten)]
     builder: PayloadBuilderArgs,
@@ -223,7 +226,7 @@ impl Command {
                 ctx.task_executor.clone(),
                 1,
             ),
-            Default::default(),
+            self.txpool.pool_config(),
         );
         info!(target: "reth::cli", "Transaction pool initialized");
 
